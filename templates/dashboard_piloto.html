@@ -1,8 +1,87 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Piloto</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { height: 100vh; width: 230px; position: fixed; background-color: #000; color: #ffc107; padding-top: 30px; }
+        .sidebar a { color: #ffc107; padding: 15px; display: block; text-decoration: none; font-weight: 500; }
+        .sidebar a:hover { background-color: #1a1a1a; }
+        .content { margin-left: 230px; padding: 20px; }
+        .logo-container { text-align: center; margin-bottom: 20px; }
+        .logo-container img { width: 100px; border-radius: 50%; border: 3px solid #ffc107; }
+        .logout { position: absolute; bottom: 30px; width: 100%; }
+        .card-metric { height: 120px; border: 2px solid #000; }
+    </style>
+</head>
+<body>
 
-{% block title %}Dashboard Piloto{% endblock %}
+<div class="sidebar">
+    <div class="logo-container">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo">
+    </div>
+    <a href="{{ url_for('dashboard_piloto') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('relatorios_piloto') }}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
 
-{% block content %}
-<h2>Bem-vindo Piloto!</h2>
-<p>Aqui você verá seu desempenho individual.</p>
-{% endblock %}
+    <div class="logout">
+        <a href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </div>
+</div>
+
+<div class="content">
+    <h3>Bem-vindo, <span class="badge bg-warning text-dark">{{ nome_piloto }}</span></h3>
+    <h5>Escuderia: <span class="badge bg-dark text-warning">{{ escuderia }}</span></h5>
+
+    <div class="row my-4">
+        <div class="col-md-6">
+            <div class="card card-metric text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Primeiro Ano</h5>
+                    <h2>{{ primeiro_ano }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card card-metric text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Último Ano</h5>
+                    <h2>{{ ultimo_ano }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4>Resumo de Competições:</h4>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Ano</th>
+                <th>Circuito</th>
+                <th>Pontos</th>
+                <th>Vitórias</th>
+                <th>Corridas</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in competicoes %}
+            <tr>
+                <td>{{ row[0] }}</td>
+                <td>{{ row[1] }}</td>
+                <td>{{ row[2] }}</td>
+                <td>{{ row[3] }}</td>
+                <td>{{ row[4] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

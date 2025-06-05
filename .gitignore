@@ -1,5 +1,6 @@
 # Build folder and log file
 build/
 build.log
-
+__pycache__
+# Python bytecode files
 .venv/

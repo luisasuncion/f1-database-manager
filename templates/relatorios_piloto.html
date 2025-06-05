@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatórios - Piloto</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { height: 100vh; width: 230px; position: fixed; background-color: #000; color: #ffc107; padding-top: 30px; }
+        .sidebar a { color: #ffc107; padding: 15px; display: block; text-decoration: none; font-weight: 500; }
+        .sidebar a:hover { background-color: #1a1a1a; }
+        .content { margin-left: 230px; padding: 20px; }
+        .logo-container { text-align: center; margin-bottom: 20px; }
+        .logo-container img { width: 100px; border-radius: 50%; border: 3px solid #ffc107; }
+        .logout { position: absolute; bottom: 30px; width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="logo-container">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo">
+    </div>
+
+    <a href="{{ url_for('dashboard_piloto') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('relatorios_piloto') }}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
+
+    <div class="logout">
+        <a href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </div>
+</div>
+
+<div class="content">
+    <h3><span class="badge bg-warning text-dark">Relatórios - Piloto</span></h3>
+
+    <form method="POST" class="mb-4">
+        <div class="d-grid gap-3 d-md-flex justify-content-md-start">
+            <button type="submit" class="btn btn-warning text-dark" name="relatorio" value="relatorio6">Relatório 6</button>
+            <button type="submit" class="btn btn-warning text-dark" name="relatorio" value="relatorio7">Relatório 7</button>
+        </div>
+    </form>
+
+    {% if relatorio_selecionado == 'relatorio6' %}
+        <h5>Pontos obtidos por ano e corrida:</h5>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Ano</th>
+                    <th>Corrida</th>
+                    <th>Pontos</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in resultados %}
+                <tr>
+                    <td>{{ row[0] }}</td>
+                    <td>{{ row[1] }}</td>
+                    <td>{{ row[2] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    {% if relatorio_selecionado == 'relatorio7' %}
+        <h5>Quantidade de Resultados por Status:</h5>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Quantidade</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in resultados %}
+                <tr>
+                    <td>{{ row[0] }}</td>
+                    <td>{{ row[1] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

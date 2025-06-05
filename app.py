@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 from db import get_connection
 import psycopg2
+import csv
+from werkzeug.utils import secure_filename
 
 # Iniciamos la aplicación Flask
 app = Flask(__name__)
@@ -13,7 +15,6 @@ def ms_para_hhmmss(ms):
     segundos_restantes = segundos % 60
     return f"{horas:02}:{minutos:02}:{segundos_restantes:02}"
 
-
 # Login 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -24,7 +25,7 @@ def login():
         conn = get_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT userid, tipo, password FROM users WHERE login = %s", (login,))
+        cur.execute("SELECT userid, tipo, password, idoriginal FROM users WHERE login = %s", (login,))
         user = cur.fetchone()
 
         if user and password == user[2]:  # ⚠️ Falta el SCRAM-SHA-256
@@ -34,14 +35,17 @@ def login():
             if user[1] == 'Administrador':
                 return redirect(url_for('dashboard_admin'))
             elif user[1] == 'Escuderia':
+                session['constructor_id'] = user[3] 
                 return redirect(url_for('dashboard_escuderia'))
             elif user[1] == 'Piloto':
+                session['driver_id'] = user[3]
                 return redirect(url_for('dashboard_piloto'))
         else:
             return render_template('login.html', error="Login ou senha inválidos")
         
     return render_template('login.html')
 
+# Administrador
 @app.route('/admin')
 def dashboard_admin():
     conn = get_connection()
@@ -165,13 +169,282 @@ def acoes_admin():
 
     return render_template('acoes_admin.html')
 
+@app.route('/admin/relatorios', methods=['GET', 'POST'])
+def relatorios_admin():
+    resultados = None
+    relatorio_selecionado = None
+
+    if request.method == 'POST':
+        relatorio_selecionado = request.form.get('relatorio')
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        if relatorio_selecionado == "relatorio1":
+            cur.execute("""
+                SELECT s.Status, COUNT(*) AS quantidade
+                FROM Results r
+                JOIN Status s ON r.StatusId = s.StatusId
+                GROUP BY s.Status
+                ORDER BY quantidade DESC;
+            """)
+            resultados = cur.fetchall()
+
+        elif relatorio_selecionado == "relatorio2":
+            cidade = request.form.get('cidade')
+
+            conn = get_connection()
+            cur = conn.cursor()
+
+            cur.execute("""
+                SELECT 
+                    g.Name AS cidade_pesquisada,
+                    a.IATACode,
+                    a.Name AS aeroporto,
+                    a.City AS cidade_aeroporto,
+                    (earth_distance(ll_to_earth(g.Lat, g.Long), ll_to_earth(a.LatDeg, a.LongDeg))) / 1000 AS distancia_km,
+                    a.Type
+                FROM Airports a
+                JOIN GeoCities15K g ON g.Name ILIKE %s AND g.Country = 'BR'
+                WHERE a.IsoCountry = 'BR'
+                AND a.Type IN ('large_airport', 'medium_airport')
+                AND (earth_distance(ll_to_earth(g.Lat, g.Long), ll_to_earth(a.LatDeg, a.LongDeg))) <= 100000
+                ORDER BY distancia_km;
+            """, (cidade,))
+
+            resultados = cur.fetchall()
+            
+        ## Relatorio 3 <- falta
+
+        cur.close()
+        conn.close()
+
+    return render_template('relatorios_admin.html', resultados=resultados, relatorio_selecionado=relatorio_selecionado)
+
+# Escuderia
 @app.route('/escuderia')
 def dashboard_escuderia():
-    return render_template('dashboard_escuderia.html')
+    constructor_id = session.get('constructor_id')
 
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT Name FROM Constructors WHERE ConstructorId = %s", (constructor_id,))
+    result = cur.fetchone()
+
+    if result is None:
+        cur.close()
+        conn.close()
+        return "Escuderia não encontrada"
+
+    constructor_name = result[0]
+
+    # Ahora ya llamas las funciones igual
+    cur.execute("SELECT total_vitorias_escuderia(%s);", (constructor_id,))
+    vitorias = cur.fetchone()[0]
+
+    cur.execute("SELECT total_pilotos_escuderia(%s);", (constructor_id,))
+    total_pilotos = cur.fetchone()[0]
+
+    cur.execute("SELECT * FROM anos_escuderia(%s);", (constructor_id,))
+    anos = cur.fetchone()
+    primeiro_ano, ultimo_ano = anos
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        'dashboard_escuderia.html',
+        constructor_name=constructor_name,
+        total_pilotos=total_pilotos,
+        vitorias=vitorias,
+        primeiro_ano=primeiro_ano,
+        ultimo_ano=ultimo_ano
+    )
+
+@app.route('/escuderia/acoes', methods=['GET', 'POST'])
+def acoes_escuderia():
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    pilotos = None  # Inicializamos vacío
+
+    if request.method == 'POST':
+        if 'forename' in request.form:
+            forename = request.form['forename'].strip()
+            constructor_id = session.get('constructor_id')
+
+            cur.execute("""
+                SELECT d.Forename, d.Surname, d.Dob, d.Nationality
+                FROM Drivers d
+                JOIN Results r ON d.DriverId = r.DriverId
+                WHERE r.ConstructorId = %s AND d.Forename ILIKE %s
+                GROUP BY d.Forename, d.Surname, d.Dob, d.Nationality
+            """, (constructor_id, f"%{forename}%"))
+
+            pilotos = cur.fetchall()
+
+        elif 'arquivo' in request.files:
+            file = request.files['arquivo']
+
+            if not file:
+                flash("Nenhum arquivo enviado.", "danger")
+                return redirect(url_for('acoes_escuderia'))
+
+            filename = secure_filename(file.filename)
+            filepath = f"/tmp/{filename}"
+            file.save(filepath)
+
+            conn = get_connection()
+            cur = conn.cursor()
+
+            inseridos = 0
+            repetidos = 0
+
+            with open(filepath, newline='', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if len(row) < 7:
+                        continue  # linha incompleta
+
+                    driverref = row[0].strip().lower()
+                    number = row[1].strip() or None
+                    code = row[2].strip()
+                    forename = row[3].strip()
+                    surname = row[4].strip()
+                    dob = row[5].strip()
+                    nationality = row[6].strip()
+                    url = row[7].strip() if len(row) > 7 else None
+
+                    # Verificar duplicados por forename + surname
+                    cur.execute("""
+                        SELECT 1 FROM Drivers WHERE lower(Forename) = %s AND lower(Surname) = %s
+                    """, (forename.lower(), surname.lower()))
+
+                    if cur.fetchone():
+                        repetidos += 1
+                        continue
+
+                    cur.execute("""
+                        INSERT INTO Drivers (DriverRef, Number, Code, Forename, Surname, Dob, Nationality, Url)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (driverref, number, code, forename, surname, dob, nationality, url))
+
+                    inseridos += 1
+
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            flash(f"{inseridos} pilotos inseridos com sucesso. {repetidos} já existiam.", "success")
+
+    cur.close()
+    conn.close()
+
+    return render_template('acoes_escuderia.html', pilotos=pilotos)
+
+@app.route('/escuderia/relatorios', methods=['GET', 'POST'])
+def relatorios_escuderia():
+    resultados = None
+    relatorio_selecionado = None
+    constructor_id = session.get('constructor_id')
+
+    if request.method == 'POST':
+        relatorio_selecionado = request.form.get('relatorio')
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        if relatorio_selecionado == "relatorio4":
+            cur.execute("SELECT * FROM pilotos_vitorias(%s);", (constructor_id,))
+            resultados = cur.fetchall()
+
+        # relatorio5
+        if relatorio_selecionado == "relatorio5":
+            cur.execute("SELECT * FROM status_escuderia(%s);", (constructor_id,))
+            resultados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+    return render_template('relatorios_escuderia.html', resultados=resultados, relatorio_selecionado=relatorio_selecionado)
+
+# Pilotos
 @app.route('/piloto')
 def dashboard_piloto():
-    return render_template('dashboard_piloto.html')
+    driver_id = session.get('driver_id')  # ID do piloto logado
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Buscar nome do piloto
+    cur.execute("SELECT Forename, Surname FROM Drivers WHERE DriverId = %s", (driver_id,))
+    result = cur.fetchone()
+
+    if result is None:
+        flash("Piloto não encontrado.", "danger")
+        return redirect(url_for('login'))
+
+    # Buscar escuderia atual do piloto
+    cur.execute("""
+        SELECT c.Name
+        FROM Constructors c
+        JOIN Results res ON c.ConstructorId = res.ConstructorId
+        WHERE res.DriverId = %s
+        LIMIT 1
+    """, (driver_id,))
+    escuderia = cur.fetchone()[0]
+
+    forename, surname = result
+
+    forename, surname = result
+    nome_piloto = f"{forename} {surname}"
+
+    # Buscar anos (primeiro e último)
+    cur.execute("SELECT * FROM anos_piloto(%s)", (driver_id,))
+    anos = cur.fetchone()
+    primeiro_ano, ultimo_ano = anos
+
+    # Buscar resumo de competições
+    cur.execute("SELECT * FROM resumo_competicoes_piloto(%s)", (driver_id,))
+    competicoes = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        'dashboard_piloto.html',
+        nome_piloto=nome_piloto,
+        escuderia=escuderia,
+        primeiro_ano=primeiro_ano,
+        ultimo_ano=ultimo_ano,
+        competicoes=competicoes
+    )
+
+@app.route('/piloto/relatorios', methods = ['GET', 'POST'])
+def relatorios_piloto():
+    resultados = None
+    relatorio_selecionado = None
+    driver_id = session.get('driver_id')
+
+    if request.method == 'POST':
+        relatorio_selecionado = request.form.get('relatorio')
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        if relatorio_selecionado == "relatorio6":
+            cur.execute("SELECT * FROM pontos_por_ano(%s);", (driver_id,))
+            resultados = cur.fetchall()
+
+        if relatorio_selecionado == "relatorio7":
+            cur.execute("SELECT * FROM status_piloto(%s);", (driver_id,))
+            resultados = cur.fetchall()
+
+        cur.close()
+        conn.close()
+
+    return render_template('relatorios_piloto.html', resultados=resultados, relatorio_selecionado=relatorio_selecionado)
 
 @app.route('/logout')
 def logout():
