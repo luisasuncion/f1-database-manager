@@ -237,9 +237,8 @@ def dashboard_escuderia():
         conn.close()
         return "Escuderia não encontrada"
 
-    constructor_name = result[0]
+    session['constructor_name'] = result[0]
 
-    # Ahora ya llamas las funciones igual
     cur.execute("SELECT total_vitorias_escuderia(%s);", (constructor_id,))
     vitorias = cur.fetchone()[0]
 
@@ -255,7 +254,6 @@ def dashboard_escuderia():
 
     return render_template(
         'dashboard_escuderia.html',
-        constructor_name=constructor_name,
         total_pilotos=total_pilotos,
         vitorias=vitorias,
         primeiro_ano=primeiro_ano,
@@ -268,6 +266,8 @@ def acoes_escuderia():
     cur = conn.cursor()
     
     pilotos = None  # Inicializamos vacío
+
+    constructor_name = session.get('constructor_name')
 
     if request.method == 'POST':
         if 'forename' in request.form:
@@ -393,12 +393,13 @@ def dashboard_piloto():
         WHERE res.DriverId = %s
         LIMIT 1
     """, (driver_id,))
-    escuderia = cur.fetchone()[0]
 
-    forename, surname = result
+    session['escuderia'] = cur.fetchone()[0]
 
     forename, surname = result
     nome_piloto = f"{forename} {surname}"
+
+    session['nome_piloto'] = nome_piloto
 
     # Buscar anos (primeiro e último)
     cur.execute("SELECT * FROM anos_piloto(%s)", (driver_id,))
@@ -414,8 +415,6 @@ def dashboard_piloto():
 
     return render_template(
         'dashboard_piloto.html',
-        nome_piloto=nome_piloto,
-        escuderia=escuderia,
         primeiro_ano=primeiro_ano,
         ultimo_ano=ultimo_ano,
         competicoes=competicoes

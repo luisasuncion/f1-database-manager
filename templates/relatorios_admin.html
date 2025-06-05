@@ -27,7 +27,13 @@
     <a href="{{ url_for('acoes_admin') }}"><i class="bi bi-gear"></i> Ações</a>
     <a href="{{ url_for('relatorios_admin') }}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
 
-    <div class="logout">
+    <div class="perfil-container text-center" style="position: absolute; bottom: 80px; width: 100%;">
+        <img src="{{ url_for('static', filename='images/perfil.png') }}" class="rounded-circle border border-warning" width="80" alt="Perfil">
+        <h6 class="mt-2 text-light">Administrador</h6>
+        <span class="text-warning small">Admin</span>
+    </div>
+
+    <div class="logout" style="position: absolute; bottom: 20px; width: 100%;">
         <a href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </div>
 </div>

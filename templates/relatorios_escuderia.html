@@ -18,7 +18,6 @@
 </head>
 <body>
 
-<!-- Sidebar igual a todas as telas -->
 <div class="sidebar">
     <div class="logo-container">
         <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo">
@@ -28,12 +27,17 @@
     <a href="{{ url_for('acoes_escuderia') }}"><i class="bi bi-gear"></i> Ações</a>
     <a href="{{ url_for('relatorios_escuderia') }}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
 
-    <div class="logout">
+    <div class="perfil-container text-center" style="position: absolute; bottom: 80px; width: 100%;">
+        <img src="{{ url_for('static', filename='images/perfil_escuderia.png') }}" class="rounded-circle border border-warning" width="80" alt="Perfil">
+        <h6 class="mt-2 text-light">{{ session['constructor_name'] }}</h6>
+        <span class="text-warning small">Escuderia</span>
+    </div>
+
+    <div class="logout" style="position: absolute; bottom: 20px; width: 100%;">
         <a href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </div>
 </div>
 
-<!-- Conteúdo principal -->
 <div class="content">
     <h3><span class="badge bg-warning text-dark">Relatórios - Escuderia</span></h3>
 

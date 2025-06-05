@@ -26,14 +26,20 @@
     <a href="{{ url_for('dashboard_piloto') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
     <a href="{{ url_for('relatorios_piloto') }}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
 
+    <div class="perfil-container text-center" style="position: absolute; bottom: 80px; width: 100%;">
+        <img src="{{ url_for('static', filename='images/perfil_piloto.png') }}" class="rounded-circle border border-warning" width="80" alt="Perfil">
+        <h6 class="mt-2 text-light">{{ session['nome_piloto'] }}</h6>
+        <span class="text-warning small">{{ session['escuderia'] }} </span>
+    </div>
+
     <div class="logout">
         <a href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
     </div>
 </div>
 
 <div class="content">
-    <h3>Bem-vindo, <span class="badge bg-warning text-dark">{{ nome_piloto }}</span></h3>
-    <h5>Escuderia: <span class="badge bg-dark text-warning">{{ escuderia }}</span></h5>
+    <h3>Bem-vindo, <span class="badge bg-warning text-dark">{{ session['nome_piloto'] }}</span></h3>
+    <h5>Escuderia: <span class="badge bg-dark text-warning">{{ session['escuderia'] }}</span></h5>
 
     <div class="row my-4">
         <div class="col-md-6">
