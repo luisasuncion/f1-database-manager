@@ -9,11 +9,14 @@ app = Flask(__name__)
 app.secret_key = 'secret'
 
 def ms_para_hhmmss(ms):
+    if ms is None:
+        return '00:00:00'
     segundos = ms // 1000
     horas = segundos // 3600
     minutos = (segundos % 3600) // 60
     segundos_restantes = segundos % 60
     return f"{horas:02}:{minutos:02}:{segundos_restantes:02}"
+
 
 # Decorador para verificar login básico
 def login_required(f):
@@ -157,14 +160,14 @@ def acoes_admin():
                 # Verificar se já existe
                 cur.execute("SELECT 1 FROM Constructors WHERE lower(ConstructorRef) = %s", (constructorref,))
                 if cur.fetchone():
-                    flash("Já existe uma escuderia com esse ConstructorRef.", "danger")
+                    flash("Já existe uma escuderia com esse ConstructorRef.", "escuderia_error")
                 else:
                     cur.execute("""
                         INSERT INTO Constructors (ConstructorRef, Name, Nationality, Url)
                         VALUES (%s, %s, %s, %s)
                     """, (constructorref, name, nationality, url_field))
                     conn.commit()
-                    flash("Escuderia cadastrada com sucesso!", "success")
+                    flash("Escuderia cadastrada com sucesso!", "escuderia_success")
 
             elif 'driverref' in request.form:  # Cadastro de Piloto
                 driverref = request.form['driverref'].strip().lower()
@@ -176,20 +179,20 @@ def acoes_admin():
                 nationality = request.form['nationality'].strip()
 
                 # Verificar se já existe
-                cur.execute("SELECT 1 FROM Driver WHERE lower(DriverRef) = %s", (driverref,))
+                cur.execute("SELECT 1 FROM Drivers WHERE lower(DriverRef) = %s", (driverref,))
                 if cur.fetchone():
-                    flash("Já existe um piloto com esse DriverRef.", "danger")
+                    flash("Já existe um piloto com esse nome e sobrenome.", "piloto_error")
                 else:
                     cur.execute("""
-                        INSERT INTO Driver (DriverRef, Number, Code, Forename, Surname, Dob, Nationality)
+                        INSERT INTO Drivers (DriverRef, Number, Code, Forename, Surname, Dob, Nationality)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (driverref, number, code, forename, surname, dob, nationality))
                     conn.commit()
-                    flash("Piloto cadastrado com sucesso!", "success")
+                    flash("Piloto cadastrado com sucesso!", "piloto_success")
 
         except Exception as e:
             conn.rollback()
-            flash(f"Erro ao inserir: {str(e)}", "danger")
+            flash(f"Erro ao inserir: {str(e)}", "escuderia_error")
 
     cur.close()
     conn.close()
@@ -244,7 +247,78 @@ def relatorios_admin():
             resultados = cur.fetchall()
             
         ## Relatorio 3 <- falta
+        elif relatorio_selecionado == "relatorio3":
 
+            conn = get_connection()
+            cur = conn.cursor()
+
+            # Nivel 1: Escuderias e quantidade de pilotos
+            cur.execute("""
+                SELECT 
+                    c.Name AS escuderia,
+                    COUNT(DISTINCT r.DriverId) AS total_pilotos
+                FROM Constructors c
+                LEFT JOIN Results r ON c.ConstructorId = r.ConstructorId
+                GROUP BY c.Name
+                ORDER BY c.Name;
+            """)
+            escuderias = cur.fetchall()
+
+            # Nivel 2: Total de corridas
+            cur.execute("SELECT COUNT(*) FROM Races;")
+            total_corridas = cur.fetchone()[0]
+
+            # Nivel 3: Corridas por circuito com min, max e avg
+            cur.execute("""
+                SELECT 
+                    c.Name AS circuito,
+                    MIN(res.Laps) AS min_voltas,
+                    MAX(res.Laps) AS max_voltas,
+                    AVG(res.Laps)::NUMERIC(10,2) AS media_voltas
+                FROM Races r
+                JOIN Circuits c ON r.CircuitId = c.CircuitId
+                JOIN Results res ON r.RaceId = res.RaceId
+                GROUP BY c.Name
+                ORDER BY c.Name;
+            """)
+            circuitos = cur.fetchall()
+
+            # Nivel 4: Corridas por circuito e tempo total
+            cur.execute("""
+                SELECT 
+                    c.Name AS circuito,
+                    r.Name AS corrida,
+                    SUM(res.Laps) AS total_voltas,
+                    SUM(res.Milliseconds) AS tempo_total_ms
+                FROM Races r
+                JOIN Circuits c ON r.CircuitId = c.CircuitId
+                JOIN Results res ON r.RaceId = res.RaceId
+                GROUP BY c.Name, r.Name
+                ORDER BY c.Name, r.Name;
+            """)
+            corridas = cur.fetchall()
+            corridas_formatadas = []
+
+            for corrida in corridas:
+                circuito = corrida[0]
+                nome_corrida = corrida[1]
+                total_voltas = corrida[2]
+                tempo_total_ms = corrida[3]
+
+                tempo_formatado = ms_para_hhmmss(tempo_total_ms)
+                corridas_formatadas.append((circuito, nome_corrida, total_voltas, tempo_formatado))
+
+
+            cur.close()
+            conn.close()
+
+            resultados = {
+                "escuderias": escuderias,
+                "total_corridas": total_corridas,
+                "circuitos": circuitos,
+                "corridas": corridas_formatadas
+            }
+        
         cur.close()
         conn.close()
 
@@ -416,13 +490,17 @@ def dashboard_piloto():
 
     # Buscar nome do piloto
     cur.execute("SELECT Forename, Surname FROM Drivers WHERE DriverId = %s", (driver_id,))
-    result = cur.fetchone()
+    piloto_result = cur.fetchone()
 
-    if result is None:
+    if piloto_result is None:
         flash("Piloto não encontrado.", "danger")
         return redirect(url_for('login'))
 
-    # Buscar escuderia atual do piloto
+    forename, surname = piloto_result
+    nome_piloto = f"{forename} {surname}"
+    session['nome_piloto'] = nome_piloto
+
+    # Buscar escuderia atual do piloto (se já participou de alguma corrida)
     cur.execute("""
         SELECT c.Name
         FROM Constructors c
@@ -430,18 +508,21 @@ def dashboard_piloto():
         WHERE res.DriverId = %s
         LIMIT 1
     """, (driver_id,))
+    escuderia_result = cur.fetchone()
 
-    session['escuderia'] = cur.fetchone()[0]
-
-    forename, surname = result
-    nome_piloto = f"{forename} {surname}"
-
-    session['nome_piloto'] = nome_piloto
+    if escuderia_result:
+        session['escuderia'] = escuderia_result[0]
+    else:
+        session['escuderia'] = "Sem Escuderia"
 
     # Buscar anos (primeiro e último)
     cur.execute("SELECT * FROM anos_piloto(%s)", (driver_id,))
     anos = cur.fetchone()
-    primeiro_ano, ultimo_ano = anos
+
+    if anos and anos[0] and anos[1]:
+        primeiro_ano, ultimo_ano = anos
+    else:
+        primeiro_ano, ultimo_ano = '-', '-'
 
     # Buscar resumo de competições
     cur.execute("SELECT * FROM resumo_competicoes_piloto(%s)", (driver_id,))

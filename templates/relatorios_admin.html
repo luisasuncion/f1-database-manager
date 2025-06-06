@@ -109,7 +109,42 @@
                 </table>
             {% endif %}
         {% endif %}
-
+        {% if relatorio_selecionado == 'relatorio3' %}
+            <h5>Quantidade de Pilotos por Escuderia:</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr><th>Escuderia</th><th>Total de Pilotos</th></tr>
+                </thead>
+                <tbody>
+                    {% for e in resultados.escuderias %}
+                    <tr><td>{{ e[0] }}</td><td>{{ e[1] }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <h5>Total de Corridas Cadastradas: {{ resultados.total_corridas }}</h5>
+            <h5>Corridas por Circuito (Min, Max, Média de Voltas):</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr><th>Circuito</th><th>Mín</th><th>Máx</th><th>Média</th></tr>
+                </thead>
+                <tbody>
+                    {% for c in resultados.circuitos %}
+                    <tr><td>{{ c[0] }}</td><td>{{ c[1] }}</td><td>{{ c[2] }}</td><td>{{ c[3] }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <h5>Detalhe de Corridas:</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr><th>Circuito</th><th>Corrida</th><th>Voltas</th><th>Tempo Total (ms)</th></tr>
+                </thead>
+                <tbody>
+                    {% for c in resultados.corridas %}
+                    <tr><td>{{ c[0] }}</td><td>{{ c[1] }}</td><td>{{ c[2] }}</td><td>{{ c[3] }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>   
+        {% endif %}      
     {% endif %}
 </div>
 
