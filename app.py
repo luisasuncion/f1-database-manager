@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 from db import get_connection
-import psycopg2
 import csv
+from functools import wraps
 from werkzeug.utils import secure_filename
 
 # Iniciamos la aplicación Flask
@@ -14,6 +14,28 @@ def ms_para_hhmmss(ms):
     minutos = (segundos % 3600) // 60
     segundos_restantes = segundos % 60
     return f"{horas:02}:{minutos:02}:{segundos_restantes:02}"
+
+# Decorador para verificar login básico
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'userid' not in session:
+            flash('Por favor, faça login primeiro.', 'warning')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Decorador para verificar o tipo de usuário
+def role_required(role):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'tipo' not in session or session['tipo'] != role:
+                flash('Acesso não autorizado.', 'danger')
+                return redirect(url_for('login'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 # Login 
 @app.route('/', methods=['GET', 'POST'])
@@ -47,6 +69,8 @@ def login():
 
 # Administrador
 @app.route('/admin')
+@login_required
+@role_required('Administrador')
 def dashboard_admin():
     conn = get_connection()
     cur = conn.cursor()
@@ -66,6 +90,7 @@ def dashboard_admin():
     JOIN Results res ON r.RaceId = res.RaceId
     WHERE r.Year = 2024
     GROUP BY r.Name
+    ORDER BY 1
     """)
     corridas_raw = cur.fetchall()
 
@@ -115,6 +140,8 @@ def dashboard_admin():
     )
 
 @app.route('/admin/acoes' , methods=['GET', 'POST'])
+@login_required
+@role_required('Administrador')
 def acoes_admin():
     conn = get_connection()
     cur = conn.cursor()
@@ -170,6 +197,8 @@ def acoes_admin():
     return render_template('acoes_admin.html')
 
 @app.route('/admin/relatorios', methods=['GET', 'POST'])
+@login_required
+@role_required('Administrador')
 def relatorios_admin():
     resultados = None
     relatorio_selecionado = None
@@ -223,6 +252,8 @@ def relatorios_admin():
 
 # Escuderia
 @app.route('/escuderia')
+@login_required
+@role_required('Escuderia')
 def dashboard_escuderia():
     constructor_id = session.get('constructor_id')
 
@@ -261,6 +292,8 @@ def dashboard_escuderia():
     )
 
 @app.route('/escuderia/acoes', methods=['GET', 'POST'])
+@login_required
+@role_required('Escuderia')
 def acoes_escuderia():
     conn = get_connection()
     cur = conn.cursor()
@@ -344,6 +377,8 @@ def acoes_escuderia():
     return render_template('acoes_escuderia.html', pilotos=pilotos)
 
 @app.route('/escuderia/relatorios', methods=['GET', 'POST'])
+@login_required
+@role_required('Escuderia')
 def relatorios_escuderia():
     resultados = None
     relatorio_selecionado = None
@@ -371,6 +406,8 @@ def relatorios_escuderia():
 
 # Pilotos
 @app.route('/piloto')
+@login_required
+@role_required('Piloto')
 def dashboard_piloto():
     driver_id = session.get('driver_id')  # ID do piloto logado
 
@@ -421,6 +458,8 @@ def dashboard_piloto():
     )
 
 @app.route('/piloto/relatorios', methods = ['GET', 'POST'])
+@login_required
+@role_required('Piloto')
 def relatorios_piloto():
     resultados = None
     relatorio_selecionado = None
