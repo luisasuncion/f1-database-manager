@@ -4,6 +4,7 @@ import csv
 from functools import wraps
 from werkzeug.utils import secure_filename
 import hashlib
+import datetime
 
 # Iniciamos la aplicación Flask
 app = Flask(__name__)
@@ -58,6 +59,18 @@ def login():
             hashed_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
 
             if hashed_input == user[2]:  # Comparación directa con lo que está en la base
+
+                # Registro de log de login
+                hoje = datetime.date.today()
+                agora = datetime.datetime.now().time()
+
+                cur.execute("""
+                    INSERT INTO Users_Log (UserId, DataLog, HoraLog)
+                    VALUES (%s, %s, %s)
+                """, (user[0], hoje, agora))
+
+                conn.commit()
+
                 session['userid'] = user[0]
                 session['tipo'] = user[1]
                 
@@ -572,6 +585,24 @@ def relatorios_piloto():
 
 @app.route('/logout')
 def logout():
+    user_id = session.get('userid')
+
+    if user_id:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        hoje = datetime.date.today()
+        agora = datetime.datetime.now().time()
+
+        cur.execute("""
+            INSERT INTO Users_Log (UserId, DataLog, HoraLog)
+            VALUES (%s, %s, %s)
+        """, (user_id, hoje, agora))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
     session.clear()
     return redirect(url_for('login'))
 
