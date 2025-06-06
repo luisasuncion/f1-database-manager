@@ -3,6 +3,7 @@ from db import get_connection
 import csv
 from functools import wraps
 from werkzeug.utils import secure_filename
+import hashlib
 
 # Iniciamos la aplicación Flask
 app = Flask(__name__)
@@ -16,7 +17,6 @@ def ms_para_hhmmss(ms):
     minutos = (segundos % 3600) // 60
     segundos_restantes = segundos % 60
     return f"{horas:02}:{minutos:02}:{segundos_restantes:02}"
-
 
 # Decorador para verificar login básico
 def login_required(f):
@@ -53,20 +53,25 @@ def login():
         cur.execute("SELECT userid, tipo, password, idoriginal FROM users WHERE login = %s", (login,))
         user = cur.fetchone()
 
-        if user and password == user[2]:  # ⚠️ Falta el SCRAM-SHA-256
-            session['userid'] = user[0]
-            session['tipo'] = user[1]
+        if user:
+            # Generamos el hash SHA-256 del password digitado
+            hashed_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-            if user[1] == 'Administrador':
-                return redirect(url_for('dashboard_admin'))
-            elif user[1] == 'Escuderia':
-                session['constructor_id'] = user[3] 
-                return redirect(url_for('dashboard_escuderia'))
-            elif user[1] == 'Piloto':
-                session['driver_id'] = user[3]
-                return redirect(url_for('dashboard_piloto'))
-        else:
-            return render_template('login.html', error="Login ou senha inválidos")
+            if hashed_input == user[2]:  # Comparación directa con lo que está en la base
+                session['userid'] = user[0]
+                session['tipo'] = user[1]
+                
+                if user[1] == 'Administrador':
+                    return redirect(url_for('dashboard_admin'))
+                elif user[1] == 'Escuderia':
+                    session['constructor_id'] = user[3]
+                    return redirect(url_for('dashboard_escuderia'))
+                elif user[1] == 'Piloto':
+                    session['driver_id'] = user[3]
+                    return redirect(url_for('dashboard_piloto'))
+            
+        flash("Login ou senha inválidos", "danger")
+        return render_template('login.html')
         
     return render_template('login.html')
 
@@ -411,17 +416,17 @@ def acoes_escuderia():
             with open(filepath, newline='', encoding='utf-8') as csvfile:
                 reader = csv.reader(csvfile)
                 for row in reader:
-                    if len(row) < 7:
+                    if len(row) < 8:
                         continue  # linha incompleta
 
                     driverref = row[0].strip().lower()
-                    number = row[1].strip() or None
+                    number = int(row[1].strip()) if row[1].strip() else None
                     code = row[2].strip()
                     forename = row[3].strip()
                     surname = row[4].strip()
                     dob = row[5].strip()
                     nationality = row[6].strip()
-                    url = row[7].strip() if len(row) > 7 else None
+                    url = row[7].strip() if row[7].strip() else None
 
                     # Verificar duplicados por forename + surname
                     cur.execute("""
